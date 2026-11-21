@@ -1,5 +1,16 @@
 ﻿# Phase II Design Report
 
+| Item | Details |
+| --- | --- |
+| Course | CS 322 |
+| Project | AI-Enabled Multimodal Smart Bookstore |
+| Team | JWD |
+| Team members | Wesley Wu, [add remaining team members] |
+| Version | [Version and date] |
+| Deadline | Tuesday, November 24, 2026, at 11:59 p.m. |
+| Submission | 322 report upload portal |
+| System specification | proj_spec.pdf |
+
 ## 1. Introduction
 
 ### System Overview
