@@ -13,7 +13,7 @@
 ### System Overview
 
 ### Collaboration Class Diagram
-![Smart Bookstore class diagram](class-diagram.png)
+![Smart Bookstore class diagram](./diagrams/class-diagram.png)
 
 ## 2. Use Cases
 
