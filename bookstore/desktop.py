@@ -3,9 +3,10 @@ import webbrowser
 from tkinter import ttk
 
 from . import money
+from .admin import add_book_dialog
 from .accounts import Accounts
 from .catalog import Catalog
-from .models import Book
+from .models import Account, Book, Role
 from .storage import Store
 
 
@@ -45,10 +46,10 @@ def configure_styles(root: tk.Tk) -> None:
     style.configure("Warning.TLabel", foreground="#a02e20")
 
 
-def launch(store: Store, *, demo: bool = False) -> None:
+def launch(store: Store, *, demo: bool = False, actor: Account | None = None) -> None:
     catalog = Catalog(store)
     accounts = Accounts(store)
-    customer = store.accounts.get("demo-customer")
+    customer = actor if actor and actor.role in (Role.CUSTOMER, Role.VIP) else None
     root = tk.Tk()
     root.title("Smart Bookstore")
     root.geometry("1060x620")
@@ -76,7 +77,7 @@ def launch(store: Store, *, demo: bool = False) -> None:
 
     filter_row = ttk.Frame(toolbar)
     filter_row.pack(fill="x", pady=(12, 0))
-    books = catalog.browse()
+
 
     def add_filter(label: str, options: list[str]) -> ttk.Combobox:
         field = ttk.Frame(filter_row)
@@ -87,11 +88,19 @@ def launch(store: Store, *, demo: bool = False) -> None:
         control.pack(fill="x", pady=(4, 0))
         return control
 
-    category = add_filter("Category", ["Any category", *sorted({book.category for book in books})])
-    author = add_filter("Author", ["Any author", *sorted({book.author for book in books})])
-    years = sorted({book.year for book in books if book.year is not None})
+    category = add_filter("Category", ["Any category"])
+    author = add_filter("Author", ["Any author"])
     year_label = "Publication year" if demo else "Gutenberg release year"
-    year = add_filter(year_label, ["Any year", *map(str, years)])
+    year = add_filter(year_label, ["Any year"])
+
+    def refresh_filters() -> None:
+        books = catalog.browse()
+        categories = sorted({book.category for book in books})
+        authors = sorted({book.author for book in books})
+        years = sorted({book.year for book in books if book.year is not None})
+        category.configure(values=["Any category", *categories])
+        author.configure(values=["Any author", *authors])
+        year.configure(values=["Any year", *map(str, years)])
 
     catalog_panel = ttk.Frame(page)
     catalog_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 18))
@@ -138,7 +147,13 @@ def launch(store: Store, *, demo: bool = False) -> None:
     feedback_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
     def update_balance() -> None:
-        balance.set(f"Demo balance  {money(customer.balance_cents)}" if customer else "Project Gutenberg")
+        if customer:
+            role_label = "VIP customer" if customer.role is Role.VIP else "Registered customer"
+            balance.set(f"{role_label} demo  |  {money(customer.balance_cents)}")
+        elif demo:
+            balance.set("Super-user demo")
+        else:
+            balance.set("Project Gutenberg")
 
     def selected_book() -> Book | None:
         selection = results.selection()
@@ -155,7 +170,13 @@ def launch(store: Store, *, demo: bool = False) -> None:
             return
         year_text = f" · {book.year}" if book.year is not None else ""
         details.set(f"{book.author}\n{book.category}{year_text}")
-        price.set("Free ebook" if book.source_url else f"List price  {money(book.price_cents)}")
+        if book.source_url:
+            price.set("Free ebook")
+        elif customer and customer.role is Role.VIP:
+            total = accounts.purchase_price(book.price_cents, customer.role)
+            price.set(f"VIP price  {money(total)}\n10% off list price")
+        else:
+            price.set(f"List price  {money(book.price_cents)}")
         buy.configure(text="Open free ebook" if book.source_url else "Buy selected book")
         can_buy = customer is not None and not customer.suspended
         buy.state(["!disabled"] if book.source_url or can_buy else ["disabled"])
@@ -198,7 +219,7 @@ def launch(store: Store, *, demo: bool = False) -> None:
     def recommend() -> None:
         reset_filters()
         query.delete(0, tk.END)
-        show(catalog.recommendations(customer), "Recommended books")
+        show(catalog.recommendations(actor), "Recommended books")
 
     def checkout() -> None:
         book = selected_book()
@@ -228,6 +249,21 @@ def launch(store: Store, *, demo: bool = False) -> None:
         update_balance()
         update_details()
 
+    def add_book() -> None:
+        book = add_book_dialog(root, catalog, actor)
+        if book is None:
+            return
+        refresh_filters()
+        reset_filters()
+        query.delete(0, tk.END)
+        show([book], "New catalog entry")
+        results.selection_set(book.id)
+        feedback_label.configure(style="Success.TLabel")
+        feedback.set(f"Added {book.title} to the catalog.")
+
+    if actor and actor.role is Role.ADMIN and not actor.suspended:
+        ttk.Button(toolbar, text="Add book", command=add_book).pack(anchor="e", pady=(8, 0))
+
     buy = ttk.Button(card, text="Buy selected book", style="Accent.TButton", command=checkout)
     buy.grid(row=5, sticky="ew")
     ttk.Button(search_row, text="Search", style="Accent.TButton", command=search).pack(
@@ -238,6 +274,7 @@ def launch(store: Store, *, demo: bool = False) -> None:
     results.bind("<<TreeviewSelect>>", update_details)
     query.bind("<Return>", search)
     update_balance()
+    refresh_filters()
     recommend()
     query.focus_set()
     root.mainloop()

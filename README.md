@@ -18,9 +18,28 @@ The sync command needs an internet connection and saves `pg_catalog.csv` on your
 
 Run `python -m bookstore` to reuse your local catalog. Search and browse work offline. The year filter uses the Gutenberg ebook release year, and **Open free ebook** opens the title’s page in your browser. Run the sync command again whenever you want to refresh the catalog.
 
-### Checkout demo
+### Customer checkout demos
 
-Run `python -m bookstore --demo` for the same four sample books and a fresh $12 demo balance each time. This mode works without a catalog download. Add `--list-books` to either launch command to list books in the terminal.
+Open `python -m bookstore` to browse Gutenberg as a visitor. To try checkout, use one of these demo modes.
+
+| Role | Launch command |
+| --- | --- |
+| Registered customer | `python -m bookstore --demo` |
+| VIP customer | `python -m bookstore --demo-vip` |
+
+Both demos start with the same four sample books and a fresh $12 balance without a Gutenberg download. The VIP demo shows and applies a 10% discount. For example, an $8.00 book costs $7.20. Add `--list-books` to a launch command to list the books in the terminal.
+
+### Super-user demo
+
+```powershell
+python -m bookstore --demo-admin
+```
+
+1. Click **Add book**.
+2. Enter a title, author, category, publication year, and price in dollars, such as `9.50`.
+3. Click **Save book**. The app displays the new entry, and you can find it using search or browse.
+
+This mode opens with a demo super-user while biometric sign-in is being built. The **Add book** button is available to active super-users. Demo entries reset when you close the app.
 
 ## Code guide
 
@@ -32,6 +51,7 @@ Run `python -m bookstore --demo` for the same four sample books and a fresh $12 
 | `reviews.py` | Ratings, purchaser weighting, taboo terms, warnings, and order status |
 | `integrations.py` | Biometric classifier and role-aware RAG/LLM interfaces, plus creative-feature entry point |
 | `__main__.py` and `desktop.py` | Terminal commands and desktop interface |
+| `admin.py` | Super-user form for adding books |
 | `gutenberg.py` | Download and parse the official catalog |
 
 The desktop app supports catalog search and browsing. Checkout is available in demo mode. The remaining

@@ -23,15 +23,19 @@ class Accounts:
         account.suspended = False
         return account.balance_cents
 
+    @staticmethod
+    def purchase_price(price_cents: int, role: Role) -> int:
+        if role is Role.VIP:
+            return (price_cents * 90 + 50) // 100
+        return price_cents
+
     def checkout(self, account_id: str, book_id: str) -> CheckoutResult:
         """Buy one copy in the in-memory demo."""
         account = self._active_customer(account_id)
         book = self.store.books[book_id]
         if book.source_url:
             raise ValueError("Open this free ebook from its source page.")
-        total = book.price_cents
-        if account.role is Role.VIP:
-            total = (total * 90 + 50) // 100
+        total = self.purchase_price(book.price_cents, account.role)
 
         fine = 0
         purchased = total <= account.balance_cents

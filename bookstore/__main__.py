@@ -3,6 +3,7 @@ import csv
 
 from . import money
 from .gutenberg import download_catalog, load_books
+from .models import Account, Role
 from .storage import Store, demo_store
 
 
@@ -11,6 +12,8 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--sync-gutenberg", action="store_true", help="Download the official catalog")
     mode.add_argument("--demo", action="store_true", help="Use the sample catalog to test checkout")
+    mode.add_argument("--demo-vip", action="store_true", help="Try checkout as a VIP customer")
+    mode.add_argument("--demo-admin", action="store_true", help="Try adding books as a super-user")
     parser.add_argument("--list-books", action="store_true", help="List books without a GUI")
     args = parser.parse_args()
 
@@ -19,7 +22,8 @@ def main() -> None:
             print("Downloading the Project Gutenberg catalog…", flush=True)
             print(f"Downloaded {download_catalog():,} Project Gutenberg ebooks.")
             return
-        store = demo_store() if args.demo else Store(books=load_books())
+        demo = args.demo or args.demo_vip or args.demo_admin
+        store = demo_store() if demo else Store(books=load_books())
     except FileNotFoundError:
         parser.exit(1, "Catalog missing. Run python -m bookstore --sync-gutenberg first.\n")
     except (OSError, ValueError, csv.Error) as error:
@@ -32,7 +36,13 @@ def main() -> None:
     else:
         from .desktop import launch
 
-        launch(store, demo=args.demo)
+        actor = store.accounts.get("demo-customer")
+        if args.demo_admin:
+            actor = Account("demo-admin", Role.ADMIN)
+        elif args.demo_vip:
+            actor = store.accounts["demo-customer"]
+            actor.role = Role.VIP
+        launch(store, demo=demo, actor=actor)
 
 
 if __name__ == "__main__":
