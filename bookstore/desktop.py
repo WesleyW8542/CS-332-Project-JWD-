@@ -74,6 +74,23 @@ def launch() -> None:
     query = ttk.Entry(search_row)
     query.pack(side="left", fill="x", expand=True)
 
+    filter_row = ttk.Frame(toolbar)
+    filter_row.pack(fill="x", pady=(12, 0))
+    books = catalog.browse()
+
+    def add_filter(label: str, options: list[str]) -> ttk.Combobox:
+        field = ttk.Frame(filter_row)
+        field.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ttk.Label(field, text=label).pack(anchor="w")
+        control = ttk.Combobox(field, state="readonly", values=options, width=15)
+        control.current(0)
+        control.pack(fill="x", pady=(4, 0))
+        return control
+
+    category = add_filter("Category", ["Any category", *sorted({book.category for book in books})])
+    author = add_filter("Author", ["Any author", *sorted({book.author for book in books})])
+    year = add_filter("Publication year", ["Any year", *map(str, sorted({book.year for book in books}))])
+
     catalog_panel = ttk.Frame(page)
     catalog_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 18))
     heading = tk.StringVar()
@@ -140,14 +157,32 @@ def launch() -> None:
             results.insert("", "end", iid=book.id,
                            values=(book.title, book.author, money(book.price_cents)))
         heading.set(label)
-        count.set(f"{len(books)} titles" if books else "No books match your search.")
+        count.set(f"{len(books)} titles" if books else "No books match these criteria.")
         update_details()
 
+    def reset_filters() -> None:
+        for control in (category, author, year):
+            control.current(0)
+
+    def browse() -> None:
+        query.delete(0, tk.END)
+        selected_author = author.get() if author.current() > 0 else ""
+        books = catalog.browse(
+            category=category.get() if category.current() > 0 else "",
+            author=selected_author,
+            year=int(year.get()) if year.current() > 0 else None,
+        )
+        if selected_author:
+            books = [book for book in books if book.author == selected_author]
+        show(books, "Browse results")
+
     def search(_event=None) -> None:
+        reset_filters()
         keywords = query.get().strip()
         show(catalog.search(keywords), "Search results" if keywords else "All books")
 
     def recommend() -> None:
+        reset_filters()
         query.delete(0, tk.END)
         show(catalog.recommendations(customer), "Recommended books")
 
@@ -178,6 +213,7 @@ def launch() -> None:
         side="left", padx=8
     )
     ttk.Button(search_row, text="Recommendations", command=recommend).pack(side="left")
+    ttk.Button(filter_row, text="Browse", command=browse).pack(side="left", anchor="s")
     results.bind("<<TreeviewSelect>>", update_details)
     query.bind("<Return>", search)
     update_balance()
