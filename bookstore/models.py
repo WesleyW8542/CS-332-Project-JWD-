@@ -15,8 +15,9 @@ class Book:
     title: str
     author: str
     category: str
-    year: int
+    year: int | None
     price_cents: int
+    source_url: str | None = None
 
 
 @dataclass

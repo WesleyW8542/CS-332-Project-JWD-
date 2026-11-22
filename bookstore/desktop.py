@@ -1,11 +1,12 @@
 ﻿import tkinter as tk
+import webbrowser
 from tkinter import ttk
 
 from . import money
 from .accounts import Accounts
 from .catalog import Catalog
 from .models import Book
-from .storage import demo_store
+from .storage import Store
 
 
 def configure_styles(root: tk.Tk) -> None:
@@ -44,11 +45,10 @@ def configure_styles(root: tk.Tk) -> None:
     style.configure("Warning.TLabel", foreground="#a02e20")
 
 
-def launch() -> None:
-    store = demo_store()
+def launch(store: Store, *, demo: bool = False) -> None:
     catalog = Catalog(store)
     accounts = Accounts(store)
-    customer = store.accounts["demo-customer"]
+    customer = store.accounts.get("demo-customer")
     root = tk.Tk()
     root.title("Smart Bookstore")
     root.geometry("1060x620")
@@ -89,7 +89,9 @@ def launch() -> None:
 
     category = add_filter("Category", ["Any category", *sorted({book.category for book in books})])
     author = add_filter("Author", ["Any author", *sorted({book.author for book in books})])
-    year = add_filter("Publication year", ["Any year", *map(str, sorted({book.year for book in books}))])
+    years = sorted({book.year for book in books if book.year is not None})
+    year_label = "Publication year" if demo else "Gutenberg release year"
+    year = add_filter(year_label, ["Any year", *map(str, years)])
 
     catalog_panel = ttk.Frame(page)
     catalog_panel.grid(row=1, column=0, sticky="nsew", padx=(0, 18))
@@ -136,7 +138,7 @@ def launch() -> None:
     feedback_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
 
     def update_balance() -> None:
-        balance.set(f"Demo balance  {money(customer.balance_cents)}")
+        balance.set(f"Demo balance  {money(customer.balance_cents)}" if customer else "Project Gutenberg")
 
     def selected_book() -> Book | None:
         selection = results.selection()
@@ -145,19 +147,31 @@ def launch() -> None:
     def update_details(_event=None) -> None:
         book = selected_book()
         title.set(book.title if book else "Select a book")
-        details.set(f"{book.author}\n{book.category} · {book.year}" if book else "")
-        price.set(f"List price  {money(book.price_cents)}" if book else "")
-        buy.state(["!disabled"] if book and not customer.suspended else ["disabled"])
+        if book is None:
+            details.set("")
+            price.set("")
+            buy.configure(text="Buy selected book" if demo else "Open free ebook")
+            buy.state(["disabled"])
+            return
+        year_text = f" · {book.year}" if book.year is not None else ""
+        details.set(f"{book.author}\n{book.category}{year_text}")
+        price.set("Free ebook" if book.source_url else f"List price  {money(book.price_cents)}")
+        buy.configure(text="Open free ebook" if book.source_url else "Buy selected book")
+        can_buy = customer is not None and not customer.suspended
+        buy.state(["!disabled"] if book.source_url or can_buy else ["disabled"])
 
     def show(books: list[Book], label: str) -> None:
         children = results.get_children()
         if children:
             results.delete(*children)
-        for book in books:
+        for book in books[:250]:
             results.insert("", "end", iid=book.id,
-                           values=(book.title, book.author, money(book.price_cents)))
+                           values=(book.title, book.author, "Free" if book.source_url else money(book.price_cents)))
         heading.set(label)
-        count.set(f"{len(books)} titles" if books else "No books match these criteria.")
+        if len(books) > 250:
+            count.set(f"Showing 250 of {len(books):,} titles. Search or filter to narrow results.")
+        else:
+            count.set(f"{len(books)} titles" if books else "No books match these criteria.")
         update_details()
 
     def reset_filters() -> None:
@@ -189,6 +203,13 @@ def launch() -> None:
     def checkout() -> None:
         book = selected_book()
         if book is None:
+            return
+        if book.source_url:
+            if not webbrowser.open(book.source_url):
+                feedback_label.configure(style="Warning.TLabel")
+                feedback.set(f"Could not open the browser. Visit {book.source_url}")
+            return
+        if customer is None:
             return
         try:
             sale = accounts.checkout(customer.id, book.id)

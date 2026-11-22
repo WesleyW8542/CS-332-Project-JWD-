@@ -27,6 +27,8 @@ class Accounts:
         """Buy one copy in the in-memory demo."""
         account = self._active_customer(account_id)
         book = self.store.books[book_id]
+        if book.source_url:
+            raise ValueError("Open this free ebook from its source page.")
         total = book.price_cents
         if account.role is Role.VIP:
             total = (total * 90 + 50) // 100
