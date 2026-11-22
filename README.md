@@ -3,16 +3,27 @@ AI-powered smart bookstore featuring personalized book recommendations, multimod
 
 ## Run the bookstore
 
-From the repository root with Python 3.10+, download the catalog once and launch the app.
+Install Python 3.10 or newer. After cloning or pulling the project, open PowerShell in the repository root.
+
+### First launch on each computer
 
 ```powershell
 python -m bookstore --sync-gutenberg
 python -m bookstore
 ```
 
-The desktop catalog uses ebook metadata from [Project Gutenberg](https://www.gutenberg.org/ebooks/offline_catalogs.html). Search and browse use the downloaded file offline. Select a book and use **Open free ebook** to visit its Gutenberg page. The year filter uses the Gutenberg ebook release year. To refresh the local copy, run the sync command again. You can also download the catalog CSV from Gutenberg’s offline catalogs page and save it as `pg_catalog.csv` in the repository root.
+The sync command needs an internet connection and saves `pg_catalog.csv` on your computer. Git ignores this file, so each teammate downloads it once. Everyone running the same code gets the same app features. The exact titles and counts can vary if Project Gutenberg updates its catalog between downloads. [Project Gutenberg offline catalogs](https://www.gutenberg.org/ebooks/offline_catalogs.html)
 
-For the temporary checkout demo, run `python -m bookstore --demo`. Use `--list-books` with either catalog mode to print its contents in the terminal.
+### Later launches
+
+Run `python -m bookstore` to reuse your local catalog. Search and browse work offline. The year filter uses the Gutenberg ebook release year, and **Open free ebook** opens the title’s page in your browser. Run the sync command again whenever you want to refresh the catalog.
+
+### Checkout demo
+
+Run `python -m bookstore --demo` for the same four sample books and a fresh $12 demo balance each time. This mode works without a catalog download. Add `--list-books` to either launch command to list books in the terminal.
+
+## Code guide
+
 | File | Starting point |
 | --- | --- |
 | `models.py` and `storage.py` | Shared records, sample data, and seam for durable storage |
