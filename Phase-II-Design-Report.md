@@ -5,7 +5,7 @@
 | Course | CS 322 |
 | Project | AI-Enabled Multimodal Smart Bookstore |
 | Team | JWD |
-| Team members | Wesley Wu, Steve Corea, [Everyone please fill this out] |
+| Team members | Wesley Wu, Steve Corea, Mohammed Islam, [Everyone please fill this out] |
 | Deadline | Tuesday, November 24, 2026, at 11:59 p.m. |
 | Submission | 322 report upload portal |
 
@@ -31,7 +31,7 @@ The numbers match the team’s existing diagram exports. Alternate and exception
 | UC-05 Chat | Planned. Check role access, retrieve relevant local material, and label the answer RAG or LLM. | Planned. Reject restricted queries and report an unavailable provider. | [RAG](diagrams/useCase5.svg), [LLM](diagrams/useCase5_2.svg) |
 | UC-06 Purchase | Show the price and ask for confirmation, then record the purchase and debit the balance. VIPs receive 10% off. | Cancel leaves the balance alone. As shown in the team diagram, confirmed underfunded purchases charge the price plus a $1 fine and suspend the account if the resulting balance is negative. | [Petri net](diagrams/PN_UC6.svg), [normal](diagrams/useCase6.svg), [underfunded](diagrams/useCase6_2.svg) |
 | UC-07 Account and deposits | An active customer views balance, purchase history and warnings, then deposits a positive amount. | Invalid deposits leave the balance alone. A suspended customer needs a super-user to reopen the account. | [Sequence](diagrams/useCase7.svg) |
-| UC-08 Ratings and reviews | Submit 1–5 stars and a comment. Mask prohibited terms, weight verified purchases at 2×, and derive the order-list status. | More than three prohibited words blocks the review and records a warning. | [Petri net](diagrams/PN_UC8.svg), [submission](diagrams/useCase8.svg), [order lists](diagrams/useCase8_2.svg) |
+| UC-08 Ratings and reviews | A signed-in RC or VC submits 1–5 stars and a comment, once per title. Mask prohibited terms, weight verified purchases at 2×, and derive the order-list status. | More than three prohibited words blocks the review and records a warning. Visitors, super-users, and suspended accounts can read reviews but not post them. A second review of the same title is rejected. | [Petri net](diagrams/PN_UC8.svg), [submission](diagrams/useCase8.svg), [order lists](diagrams/useCase8_2.svg) |
 | UC-09 Account status | Promote an eligible RC to VC. An SU can reopen a suspended account as RC with a deposit that restores a positive balance. | An RC with three warnings is suspended and a VC with three warnings is demoted. An insufficient reopening deposit leaves the account suspended. | [Petri net](diagrams/PN_UC9.svg), [status checks](diagrams/useCase9.svg), [reopening](diagrams/useCase9_2.svg) |
 | UC-10 Add book | An SU enters bibliographic details and price, optionally attaches a JPEG/PNG cover, and saves. | Invalid fields or an unreadable cover produce feedback. Cancel leaves the catalog alone. | [Sequence](diagrams/useCase10.svg) |
 | UC-11 Store and team information | An SU updates store and team notes and maintains the prohibited-word list. | The editing controls are restricted to an active SU. A failed save keeps the previous information. Retrieval indexing is scheduled for the chat phase. | [Sequence](diagrams/useCase11.svg) |
@@ -289,8 +289,12 @@ Accounts.checkout(account_id, book_id) -> CheckoutResult
 Reviews.__init__(store) -> Reviews
   Keep the shared Store reference
 
+Reviews.reviewer(reviewer_id) -> Account
+  Look up the account and reject a missing, suspended, or non-customer account
+
 Reviews.submit(reviewer_id, book_id, stars, comment) -> Review
-  Require a reviewer ID, an existing book, integer stars 1 through 5, and an active account if present
+  Require an active RC or VC reviewer, an existing book, and integer stars 1 through 5
+  Reject a second review of the same book by the same reviewer
   Count whole-word matches in the normalized prohibited set
   If more than three matches, increment warnings and apply role rules above two warnings
     Demote VC to RC or suspend RC, then signal a blocked review
@@ -586,7 +590,9 @@ edit_store_information.save() -> UI
   Show a storage error or close on success
 
 show_reviews(parent, service, book, reviewer_id) -> UI
-  Open a modal with the current reviews, stars selector, comment field, and posting controls
+  Open a modal with the current reviews
+  Add the stars selector, comment field, and posting controls if Reviews.reviewer accepts the session
+  Otherwise show a sign-in prompt in place of the posting controls
 
 show_reviews.refresh() -> UI
   Display reviews for the book and calculate its purchase-weighted average when available

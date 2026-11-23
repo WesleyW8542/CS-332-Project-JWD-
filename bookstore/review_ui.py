@@ -17,15 +17,24 @@ def show_reviews(parent, service: Reviews, book: Book, reviewer_id: str) -> None
     listing.pack(fill="both", expand=True)
     summary = tk.StringVar(window)
     ttk.Label(body, textvariable=summary).pack(anchor="w")
-    ttk.Label(body, text="Stars").pack(anchor="w", pady=(8, 0))
-    stars = ttk.Combobox(body, values=(1, 2, 3, 4, 5), state="readonly")
-    stars.pack(anchor="w")
-    stars.set("5")
-    ttk.Label(body, text="Comment").pack(anchor="w", pady=(8, 0))
-    comment = tk.Text(body, width=56, height=4, wrap="word")
-    comment.pack(fill="x")
+    try:
+        service.reviewer(reviewer_id)
+        can_post = True
+    except PermissionError:
+        can_post = False
     feedback = tk.StringVar(window)
-    ttk.Label(body, textvariable=feedback, wraplength=400).pack(anchor="w", pady=6)
+    if not can_post:
+        ttk.Label(body, text="Sign in as an active customer to post a review.",
+                  style="Muted.TLabel").pack(anchor="w", pady=(8, 0))
+    else:
+        ttk.Label(body, text="Stars").pack(anchor="w", pady=(8, 0))
+        stars = ttk.Combobox(body, values=(1, 2, 3, 4, 5), state="readonly")
+        stars.pack(anchor="w")
+        stars.set("5")
+        ttk.Label(body, text="Comment").pack(anchor="w", pady=(8, 0))
+        comment = tk.Text(body, width=56, height=4, wrap="word")
+        comment.pack(fill="x")
+        ttk.Label(body, textvariable=feedback, wraplength=400).pack(anchor="w", pady=6)
 
     def refresh() -> None:
         reviews = [review for review in service.store.reviews if review.book_id == book.id]
@@ -59,7 +68,8 @@ def show_reviews(parent, service: Reviews, book: Book, reviewer_id: str) -> None
         comment.delete("1.0", tk.END)
         refresh()
 
-    ttk.Button(body, text="Post review", command=submit).pack(anchor="e")
+    if can_post:
+        ttk.Button(body, text="Post review", command=submit).pack(anchor="e")
     refresh()
     window.grab_set()
     parent.wait_window(window)

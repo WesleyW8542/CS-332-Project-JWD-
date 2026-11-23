@@ -30,7 +30,7 @@ The main app saves account balances, purchase receipts, recommendations, ratings
 
 Use **Search by image** to select a JPEG or PNG. Text in the search box narrows the image matches. An SU can attach a searchable cover in **Add book**. For Gutenberg covers or interior images, put reference files under `book_images/` with names such as `PG-84.jpg` or `PG-84__figure.png`, using the ebook ID from its Gutenberg page. Image search covers the entries for which you have reference images.
 
-Select a book for **Ratings and reviews** or **Find similar books**. Super-users can edit **Prohibited words**, inspect **Order lists**, or update **Store and team info**. **My account** shows the balance, warnings, and purchase history.
+Select a book for **Ratings and reviews** or **Find similar books**. Anyone can read reviews. Only a signed-in registered customer or VIP can post one, and only once per title. Super-users can edit **Prohibited words**, inspect **Order lists**, or update **Store and team info**. **My account** shows the balance, warnings, and purchase history.
 
 ### Recommendations
 
@@ -62,6 +62,14 @@ python -m bookstore --demo-admin
 This mode opens with a demo super-user for testing the admin controls. The **Add book** button is available to active super-users. Books you save are stored in `local_catalog.sqlite3` and appear on later launches in super-user demo mode and in the main catalog. Git ignores this database, so each computer keeps its own additions.
 
 To try reopening an account, click **Reopen account**, enter `demo-suspended`, and deposit more than $0.50. This demo account starts at −$0.50. Account balances and status reset when the app closes.
+
+## Run the tests
+
+```powershell
+python -m unittest discover -s tests -t .
+```
+
+The tests cover checkout, fines, VIP pricing and promotion, reopening, reviews and warnings, order lists, recommendations, and the SQLite activity store. They use only the standard library and do not need a microphone, Gutenberg download, or display.
 
 ## Code guide
 
