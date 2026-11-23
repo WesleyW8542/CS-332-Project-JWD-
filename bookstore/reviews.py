@@ -8,16 +8,21 @@ class Reviews:
     def __init__(self, store: Store):
         self.store = store
 
+    def reviewer(self, reviewer_id: str) -> Account:
+        account = self.store.accounts.get(reviewer_id)
+        if account is None or account.suspended or account.role not in (Role.CUSTOMER, Role.VIP):
+            raise PermissionError("Sign in as an active customer to post a review.")
+        return account
+
     def submit(self, reviewer_id: str, book_id: str, stars: int, comment: str) -> Review:
-        if not reviewer_id.strip():
-            raise ValueError("A reviewer ID is required.")
+        account = self.reviewer(reviewer_id)
         if book_id not in self.store.books:
             raise ValueError("Book does not exist.")
         if type(stars) is not int or not 1 <= stars <= 5:
             raise ValueError("Choose between one and five stars.")
-        account = self.store.accounts.get(reviewer_id)
-        if account and account.suspended:
-            raise PermissionError("A suspended account cannot submit a review.")
+        if any(review.book_id == book_id and review.reviewer_id == account.id
+               for review in self.store.reviews):
+            raise ValueError("You have already reviewed this book.")
 
         taboo_words = [
             word for word in re.findall(r"\b\w+\b", comment)
@@ -26,7 +31,7 @@ class Reviews:
         if len(taboo_words) > 3:
             warnings = self.store.warnings.get(reviewer_id, 0) + 1
             self.store.warnings[reviewer_id] = warnings
-            if warnings > 2 and account:
+            if warnings > 2:
                 if account.role is Role.VIP:
                     account.role = Role.CUSTOMER
                 elif account.role is Role.CUSTOMER:
