@@ -1,10 +1,12 @@
 ﻿import argparse
 import csv
+import sqlite3
 
 from . import money
+from .activity import Activity
 from .gutenberg import download_catalog, load_books
 from .models import Account, Role
-from .storage import Store, demo_store
+from .storage import LocalCatalog, Store, demo_store
 
 
 def main() -> None:
@@ -14,6 +16,7 @@ def main() -> None:
     mode.add_argument("--demo", action="store_true", help="Use the sample catalog to test checkout")
     mode.add_argument("--demo-vip", action="store_true", help="Try checkout as a VIP customer")
     mode.add_argument("--demo-admin", action="store_true", help="Try adding books as a super-user")
+    mode.add_argument("--provision-admin", metavar="USERNAME", help="Enroll a local super-user by voice")
     parser.add_argument("--list-books", action="store_true", help="List books without a GUI")
     args = parser.parse_args()
 
@@ -24,10 +27,30 @@ def main() -> None:
             return
         demo = args.demo or args.demo_vip or args.demo_admin
         store = demo_store() if demo else Store(books=load_books())
+        if args.demo_admin or not demo:
+            store.local_catalog = LocalCatalog()
+            store.books.update(store.local_catalog.load())
+        if not demo:
+            store.activity = Activity()
+            store.activity.load(store)
     except FileNotFoundError:
         parser.exit(1, "Catalog missing. Run python -m bookstore --sync-gutenberg first.\n")
-    except (OSError, ValueError, csv.Error) as error:
-        parser.exit(1, f"Could not prepare the Gutenberg catalog: {error}\n")
+    except (OSError, ValueError, csv.Error, sqlite3.Error) as error:
+        parser.exit(1, f"Could not prepare the catalog: {error}\n")
+
+    if args.provision_admin:
+        from .voice import PHRASE, VoiceClassifier, record_sample
+
+        try:
+            samples = []
+            for index in range(1, 4):
+                input(f"Press Enter to record sample {index}/3, then say: {PHRASE} ")
+                samples.append(record_sample())
+            admin = VoiceClassifier(store).enroll(args.provision_admin, samples, Role.ADMIN)
+            print(f"Super-user {admin.id} enrolled.")
+        except (EOFError, ValueError, OSError, sqlite3.Error) as error:
+            parser.exit(1, f"Could not enroll super-user: {error}\n")
+        return
 
     if args.list_books:
         for book in store.books.values():
@@ -39,6 +62,8 @@ def main() -> None:
         actor = store.accounts.get("demo-customer")
         if args.demo_admin:
             actor = Account("demo-admin", Role.ADMIN)
+            suspended = Account("demo-suspended", Role.CUSTOMER, balance_cents=-50, suspended=True)
+            store.accounts[suspended.id] = suspended
         elif args.demo_vip:
             actor = store.accounts["demo-customer"]
             actor.role = Role.VIP

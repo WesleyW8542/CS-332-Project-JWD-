@@ -1,12 +1,19 @@
-﻿import tkinter as tk
+﻿import sqlite3
+import tkinter as tk
 import webbrowser
-from tkinter import ttk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
 
 from . import money
-from .admin import add_book_dialog
+from .admin import add_book_dialog, edit_store_information
+from .auth_ui import voice_session
+from .account_ui import deposit_funds, reopen_account, show_account
 from .accounts import Accounts
 from .catalog import Catalog
+from .image_search import read_image
 from .models import Account, Book, Role
+from .review_ui import manage_terms, show_order_lists, show_reviews
+from .reviews import Reviews
 from .storage import Store
 
 
@@ -47,8 +54,18 @@ def configure_styles(root: tk.Tk) -> None:
 
 
 def launch(store: Store, *, demo: bool = False, actor: Account | None = None) -> None:
+    while True:
+        changed, actor = run_window(store, demo, actor)
+        if not changed:
+            return
+
+
+def run_window(store: Store, demo: bool, actor: Account | None) -> tuple[bool, Account | None]:
+    next_actor = actor
+    session_changed = False
     catalog = Catalog(store)
     accounts = Accounts(store)
+    reviews = Reviews(store)
     customer = actor if actor and actor.role in (Role.CUSTOMER, Role.VIP) else None
     root = tk.Tk()
     root.title("Smart Bookstore")
@@ -90,7 +107,7 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
 
     category = add_filter("Category", ["Any category"])
     author = add_filter("Author", ["Any author"])
-    year_label = "Publication year" if demo else "Gutenberg release year"
+    year_label = "Publication year" if demo else "Year"
     year = add_filter(year_label, ["Any year"])
 
     def refresh_filters() -> None:
@@ -149,9 +166,11 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
     def update_balance() -> None:
         if customer:
             role_label = "VIP customer" if customer.role is Role.VIP else "Registered customer"
-            balance.set(f"{role_label} demo  |  {money(customer.balance_cents)}")
-        elif demo:
-            balance.set("Super-user demo")
+            status = "  |  Suspended" if customer.suspended else ""
+            balance.set(f"{role_label}{' demo' if demo else ''}  |  {money(customer.balance_cents)}{status}")
+            deposit_button.state(["disabled"] if customer.suspended else ["!disabled"])
+        elif actor and actor.role is Role.ADMIN:
+            balance.set("Super-user demo" if demo else "Super-user")
         else:
             balance.set("Project Gutenberg")
 
@@ -159,7 +178,24 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
         selection = results.selection()
         return store.books[selection[0]] if selection else None
 
-    def update_details(_event=None) -> None:
+    viewer_id = actor.id if actor else "@visitor"
+    last_viewed_id = None
+
+    def record_selection(_event=None) -> None:
+        nonlocal last_viewed_id
+        book = selected_book()
+        book_id = book.id if book else None
+        if book_id is not None and book_id != last_viewed_id:
+            try:
+                with store.change_activity():
+                    catalog.open_book(book_id, viewer_id)
+            except sqlite3.Error as error:
+                feedback_label.configure(style="Warning.TLabel")
+                feedback.set(str(error))
+        last_viewed_id = book_id
+        update_details()
+
+    def update_details() -> None:
         book = selected_book()
         title.set(book.title if book else "Select a book")
         if book is None:
@@ -167,9 +203,13 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
             price.set("")
             buy.configure(text="Buy selected book" if demo else "Open free ebook")
             buy.state(["disabled"])
+            review_button.state(["disabled"])
+            similar_button.state(["disabled"])
             return
-        year_text = f" · {book.year}" if book.year is not None else ""
-        details.set(f"{book.author}\n{book.category}{year_text}")
+        date_label = "Gutenberg release" if book.source_url else "Published"
+        year_text = f"\n{date_label} {book.year}" if book.year is not None else ""
+        description = f"\n\n{book.description[:200]}" if book.description else ""
+        details.set(f"{book.author}\n{book.category}{year_text}{description}")
         if book.source_url:
             price.set("Free ebook")
         elif customer and customer.role is Role.VIP:
@@ -178,10 +218,14 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
         else:
             price.set(f"List price  {money(book.price_cents)}")
         buy.configure(text="Open free ebook" if book.source_url else "Buy selected book")
+        review_button.state(["!disabled"])
+        similar_button.state(["!disabled"])
         can_buy = customer is not None and not customer.suspended
         buy.state(["!disabled"] if book.source_url or can_buy else ["disabled"])
 
     def show(books: list[Book], label: str) -> None:
+        nonlocal last_viewed_id
+        last_viewed_id = None
         children = results.get_children()
         if children:
             results.delete(*children)
@@ -216,6 +260,20 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
         keywords = query.get().strip()
         show(catalog.search(keywords), "Search results" if keywords else "All books")
 
+    def search_image() -> None:
+        filename = filedialog.askopenfilename(
+            parent=root, filetypes=[("Book images", "*.jpg *.jpeg *.png")]
+        )
+        if not filename:
+            return
+        try:
+            matches = catalog.search(query.get().strip(), read_image(Path(filename)))
+        except (OSError, ValueError) as error:
+            messagebox.showerror("Image search", str(error), parent=root)
+            return
+        reset_filters()
+        show(matches, "Image search results")
+
     def recommend() -> None:
         reset_filters()
         query.delete(0, tk.END)
@@ -232,24 +290,45 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
             return
         if customer is None:
             return
+        total = accounts.purchase_price(book.price_cents, customer.role)
+        fine_text = ""
+        if total > customer.balance_cents:
+            fine_text = "\nA $1.00 fine will apply and the account will be suspended."
+        if not messagebox.askyesno(
+            "Confirm purchase", f"Buy {book.title} for {money(total)}?{fine_text}", parent=root
+        ):
+            return
         try:
-            sale = accounts.checkout(customer.id, book.id)
-        except PermissionError as error:
+            with store.change_activity():
+                sale = accounts.checkout(customer.id, book.id)
+        except (ValueError, PermissionError, sqlite3.Error) as error:
             feedback_label.configure(style="Warning.TLabel")
             feedback.set(str(error))
             return
-        if sale.purchased:
-            message = f"Purchased {book.title} for {money(sale.total_cents)}."
-        else:
-            message = f"Insufficient funds. A {money(sale.fine_cents)} fine was charged."
+        message = f"Purchased {book.title} for {money(sale.total_cents)}."
+        if sale.fine_cents:
+            message += f" A {money(sale.fine_cents)} fine was charged."
         if sale.suspended:
             message += " Account suspended. Contact a super-user to reopen it."
-        feedback_label.configure(style="Success.TLabel" if sale.purchased else "Warning.TLabel")
+        feedback_label.configure(style="Warning.TLabel" if sale.suspended else "Success.TLabel")
         feedback.set(message)
         update_balance()
         update_details()
 
+    def similar_books() -> None:
+        book = selected_book()
+        if book:
+            show(catalog.read_alikes(book), f"Similar to {book.title}")
+
+    def open_reviews() -> None:
+        book = selected_book()
+        if book:
+            show_reviews(root, reviews, book, viewer_id)
+            update_balance()
+            update_details()
+
     def add_book() -> None:
+        nonlocal last_viewed_id
         book = add_book_dialog(root, catalog, actor)
         if book is None:
             return
@@ -257,25 +336,87 @@ def launch(store: Store, *, demo: bool = False, actor: Account | None = None) ->
         reset_filters()
         query.delete(0, tk.END)
         show([book], "New catalog entry")
+        last_viewed_id = book.id
         results.selection_set(book.id)
         feedback_label.configure(style="Success.TLabel")
         feedback.set(f"Added {book.title} to the catalog.")
 
+    def switch_session(new_actor: Account | None) -> None:
+        nonlocal next_actor, session_changed
+        next_actor = new_actor
+        session_changed = True
+        root.destroy()
+
+    def sign_in() -> None:
+        account = voice_session(root, store)
+        if account is not None:
+            switch_session(account)
+
+    def add_funds() -> None:
+        if customer:
+            message = deposit_funds(root, accounts, customer)
+            if message:
+                feedback_label.configure(style="Success.TLabel")
+                feedback.set(message)
+                update_balance()
+
+    def manage_reopening() -> None:
+        if actor:
+            message = reopen_account(root, accounts, actor)
+            if message:
+                feedback_label.configure(style="Success.TLabel")
+                feedback.set(message)
+
+    if not demo and actor is None:
+        ttk.Button(header, text="Sign in", command=sign_in).pack(side="right", padx=(0, 8))
+        ttk.Button(header, text="Register", command=lambda: voice_session(root, store, register=True)).pack(
+            side="right", padx=(0, 8)
+        )
+    elif not demo:
+        ttk.Button(header, text="Sign out", command=lambda: switch_session(None)).pack(
+            side="right", padx=(0, 8)
+        )
+
+    if customer:
+        deposit_button = ttk.Button(header, text="Add funds", command=add_funds)
+        deposit_button.pack(side="right", padx=(0, 12))
+        ttk.Button(header, text="My account",
+                   command=lambda: show_account(root, accounts, customer)).pack(side="right", padx=(0, 8))
+
     if actor and actor.role is Role.ADMIN and not actor.suspended:
-        ttk.Button(toolbar, text="Add book", command=add_book).pack(anchor="e", pady=(8, 0))
+        admin_actions = ttk.Frame(toolbar)
+        admin_actions.pack(anchor="e", pady=(8, 0))
+        ttk.Button(admin_actions, text="Reopen account", command=manage_reopening).pack(
+            side="left", padx=(0, 8)
+        )
+        ttk.Button(admin_actions, text="Prohibited words",
+                   command=lambda: manage_terms(root, reviews, actor)).pack(side="left", padx=(0, 8))
+        ttk.Button(admin_actions, text="Order lists",
+                   command=lambda: show_order_lists(root, reviews)).pack(side="left", padx=(0, 8))
+        ttk.Button(admin_actions, text="Store and team info",
+                   command=lambda: edit_store_information(root, store, actor)).pack(side="left", padx=(0, 8))
+        ttk.Button(admin_actions, text="Add book", command=add_book).pack(side="left")
 
     buy = ttk.Button(card, text="Buy selected book", style="Accent.TButton", command=checkout)
     buy.grid(row=5, sticky="ew")
+    review_button = ttk.Button(card, text="Ratings and reviews", command=open_reviews)
+    review_button.grid(row=6, sticky="ew", pady=(6, 0))
+    similar_button = ttk.Button(card, text="Find similar books", command=similar_books)
+    similar_button.grid(row=7, sticky="ew", pady=(6, 0))
     ttk.Button(search_row, text="Search", style="Accent.TButton", command=search).pack(
         side="left", padx=8
     )
+    ttk.Button(search_row, text="Search by image", command=search_image).pack(
+        side="left", padx=(0, 8)
+    )
     ttk.Button(search_row, text="Recommendations", command=recommend).pack(side="left")
     ttk.Button(filter_row, text="Browse", command=browse).pack(side="left", anchor="s")
-    results.bind("<<TreeviewSelect>>", update_details)
+    results.bind("<<TreeviewSelect>>", record_selection)
     query.bind("<Return>", search)
     update_balance()
     refresh_filters()
     recommend()
     query.focus_set()
     root.mainloop()
+    return session_changed, next_actor
 

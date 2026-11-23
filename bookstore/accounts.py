@@ -1,4 +1,7 @@
-﻿from .models import Account, CheckoutResult, Role
+﻿from datetime import datetime, timezone
+from uuid import uuid4
+
+from .models import Account, CheckoutResult, PurchaseRecord, Role
 from .storage import Store
 
 
@@ -21,6 +24,7 @@ class Accounts:
             raise ValueError("A suspended account must reach a positive balance.")
         account.balance_cents += amount_cents
         account.suspended = False
+        account.role = Role.CUSTOMER
         return account.balance_cents
 
     @staticmethod
@@ -37,25 +41,23 @@ class Accounts:
             raise ValueError("Open this free ebook from its source page.")
         total = self.purchase_price(book.price_cents, account.role)
 
-        fine = 0
-        purchased = total <= account.balance_cents
-        if purchased:
-            account.balance_cents -= total
-            account.purchases += 1
-            account.spent_cents += total
-            key = (account_id, book_id)
-            self.store.purchase_counts[key] = self.store.purchase_counts.get(key, 0) + 1
-            if account.role is Role.CUSTOMER and (
-                account.purchases > 3 or account.spent_cents > 20_000
-            ):
-                account.role = Role.VIP
-        else:
-            fine = 100
-            account.balance_cents -= fine
-            account.suspended = account.balance_cents < 0
+        fine = 100 if total > account.balance_cents else 0
+        account.balance_cents -= total + fine
+        account.purchases += 1
+        account.spent_cents += total
+        key = (account_id, book_id)
+        self.store.purchase_counts[key] = self.store.purchase_counts.get(key, 0) + 1
+        self.store.purchases.append(PurchaseRecord(
+            uuid4().hex, account_id, book_id, datetime.now(timezone.utc).isoformat(), total, fine
+        ))
+        account.suspended = account.balance_cents < 0
+        if not account.suspended and account.role is Role.CUSTOMER and (
+            account.purchases > 3 or account.spent_cents > 20_000
+        ):
+            account.role = Role.VIP
 
         return CheckoutResult(
-            purchased, total, account.balance_cents, fine, account.suspended, account.role
+            True, total, account.balance_cents, fine, account.suspended, account.role
         )
 
     def _active_customer(self, account_id: str) -> Account:

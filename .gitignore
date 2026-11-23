@@ -4,3 +4,7 @@
 
 /pg_catalog.csv
 /.gutenberg-*.part
+/local_catalog.sqlite3
+/local_catalog.sqlite3-journal
+/bookstore_activity.sqlite3*
+/book_images/

@@ -52,8 +52,3 @@ class Chat:
         if local_answer is not None:
             return ChatAnswer(local_answer, "RAG")
         return ChatAnswer(self.provider.generate(role, question), "LLM")
-
-
-def run_creative_feature(account: Account | None, query: str) -> str:
-    raise NotImplementedError("Add the team's creative feature here.")
-

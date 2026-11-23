@@ -1,4 +1,5 @@
-﻿from .models import Account, Book, Role
+﻿from .image_search import rank_images
+from .models import Account, Book, Role
 from .storage import Store
 
 
@@ -17,14 +18,14 @@ class Catalog:
         ]
 
     def search(self, keywords: str, image: bytes | None = None) -> list[Book]:
-        if image is not None:
-            raise NotImplementedError("Connect the image matching component here.")
         terms = keywords.casefold().split()
-        return [
+        matches = [
             book for book in self.browse()
-            if all(term in f"{book.title} {book.author} {book.category}".casefold()
+            if all(term in f"{book.title} {book.author} {book.category} {book.description}".casefold()
                    for term in terms)
         ]
+
+        return rank_images(image, matches) if image is not None else matches
 
     def open_book(self, book_id: str, viewer_id: str) -> Book:
         book = self.store.books[book_id]
@@ -39,6 +40,8 @@ class Catalog:
                 or not book.author.strip() or not book.category.strip()
                 or book.price_cents < 0 or book.id in self.store.books):
             raise ValueError("Enter complete book details and a unique book ID.")
+        if self.store.local_catalog is not None:
+            self.store.local_catalog.save(book)
         self.store.books[book.id] = book
 
     def recommendations(self, account: Account | None = None) -> list[Book]:
@@ -51,7 +54,23 @@ class Catalog:
             for (viewer_id, book_id), count in counts.items():
                 if book_id in scores and (customer_id is None or viewer_id == customer_id):
                     scores[book_id] += count
+        if customer_id is not None and not any(scores.values()):
+            return self.recommendations()
         return sorted(
             self.store.books.values(), key=lambda book: (-scores[book.id], book.id)
         )[:3]
 
+
+
+    def read_alikes(self, book: Book) -> list[Book]:
+        matches = []
+        for candidate in self.store.books.values():
+            if candidate.id == book.id:
+                continue
+            same_category = candidate.category.casefold() == book.category.casefold()
+            same_author = (candidate.author.casefold() == book.author.casefold()
+                           and book.author != "Unknown author")
+            score = 2 * same_category + same_author
+            if score:
+                matches.append((-score, candidate.title.casefold(), candidate.id, candidate))
+        return [candidate for _, _, _, candidate in sorted(matches)[:5]]

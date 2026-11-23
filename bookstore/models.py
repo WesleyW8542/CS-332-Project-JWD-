@@ -18,6 +18,8 @@ class Book:
     year: int | None
     price_cents: int
     source_url: str | None = None
+    description: str = ""
+    cover: bytes | None = None
 
 
 @dataclass
@@ -28,6 +30,16 @@ class Account:
     purchases: int = 0
     spent_cents: int = 0
     suspended: bool = False
+
+
+@dataclass(frozen=True)
+class PurchaseRecord:
+    id: str
+    account_id: str
+    book_id: str
+    purchased_at: str
+    price_cents: int
+    fine_cents: int
 
 
 @dataclass(frozen=True)
