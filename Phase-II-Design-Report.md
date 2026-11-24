@@ -5,7 +5,7 @@
 | Course | CS 322 |
 | Project | AI-Enabled Multimodal Smart Bookstore |
 | Team | JWD |
-| Team members | Wesley Wu, Steve Corea, [Everyone please fill this out] |
+| Team members | Wesley Wu, Steve Corea, Mohamed Ibrahim, Abeih Hamani |
 | Deadline | Tuesday, November 24, 2026, at 11:59 p.m. |
 | Submission | 322 report upload portal |
 
