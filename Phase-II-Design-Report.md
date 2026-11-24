@@ -659,7 +659,25 @@ Use the separate super-user demo to test reopening `demo-suspended`, which begin
 
 ### Meeting Memos
 
+The team generally met every two weeks through Discord calls. Abeih organized the calls by checking everyone’s availability and arranging a suitable meeting day. The following summarizes the recurring meeting topics and agreements.
+
+System planning and design: Meetings focused on how to build the AI-Enabled Multimodal Smart Bookstore and translate the project requirements into a workable design. The group discussed the use case diagrams, the E-R diagram, and the organization of the system’s functionality. Some meetings focused specifically on developing and reviewing diagrams. Major design decisions were discussed collectively so that members understood the direction of the project.
+
+Division of responsibilities: The group agreed to divide the work among implementation, report preparation, and presentation preparation:
+
+Wesley and Mohammed were responsible for coding and implementing the system.
+
+Abeih, Steven, and Mohammed Ibrahim were responsible for preparing the report and preparing for the presentation.
+
+Mohammed and Mohammed Ibrahim are separate team members. The agreed division established clear responsibilities while allowing everyone to contribute to project discussions and decisions.
+
 ### Teamwork Concerns
+
+The team experienced occasional communication delays. Scheduling calls also required coordination around members’ availability. Abeih helped manage scheduling by checking with the group before arranging meetings, and the Discord calls provided opportunities to clarify questions and agree on the next steps.
+
+Overall, collaboration proceeded smoothly. The workload was divided fairly, and members were comfortable with their assigned responsibilities. No major concerns about unfair task distribution or ongoing conflict were reported.
+
+A continuing concern is maintaining consistency between the implementation, diagrams, report, and presentation. Since different members prepare these materials, changes should be communicated to the entire group. Reviewing the materials together can help ensure that the written design and presentation accurately describe the system.
 
 ## 7. Git Repository
 
